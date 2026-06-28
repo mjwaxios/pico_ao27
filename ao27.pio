@@ -1,0 +1,86 @@
+
+.pio_version 1 // requires version 1
+
+; Generate the Receive Clock,
+;   SM needs to be set to run 16 times the baud rate
+;   Set interrupt 0 on on sample clock edge
+;   In Pins: data in (1 bit)
+;   Out Pins: n/a
+;   Jmp Pin: n/a
+;   Set Pings: n/a
+;   Side pins: 
+;          pin 0 = Subtract phase
+;          pin 1 = add phase
+;
+.program rxclock
+.clock_div 8125
+.side_set 2
+sub:
+    nop                      side 1    
+cont:
+    mov     x pins [4]       side 0
+    mov     y pins           side 0
+    irq     set 0            side 0
+    jmp     x != y extra [4] side 0
+    mov     x pins           side 0
+    jmp     x != y sub       side 0
+    jmp     cont [1]         side 0
+extra:
+    jmp cont [2]             side 2              
+
+
+; Wait for Interrupt 0 from previous PIO to signal time
+;   to sample the data
+;  Can run at full clock speed of the pico
+;   NRZI Decode to set pins
+;   set IRQ 1 when data has been written
+;   In Pins: data in (1 bit)
+;   Out Pins: n/a
+;   Jmp Pin: n/a
+;   Set Pings: NRZI output
+;   Side pins: 
+;          pin 0 = high during wait, low when running
+.program nrzi
+.clock_div 4
+.side_set 1 opt
+    jmp     waiti
+.wrap_target
+start:
+    nop     [2]             ; delay three clocks for data bits to settle
+    irq     set 1           ; Signal that we decoded a bit
+    mov     x y
+waiti:    
+    wait    1 irq 0         side 1
+    mov     y pins          side 0
+    jmp     x != y diff
+same:         ; write a one
+    set     pins 1
+    jmp     start
+diff:         ; write a zero
+    set     pins 0
+.wrap               
+
+; Wait for Interrupt 1 from previous PIO to signal time to sample
+;   set IRQ 3 when flag is detected
+;   In Pins: NRZI decoded data pin
+;   Out Pins: n/a
+;   Jmp Pin: n/a
+;   Set Pings: n/a
+;   Side pins: 
+;          pin 0 = high when current bit is the last bit of a valid flag char
+.program flag
+.clock_div 4
+.side_set 1 opt
+.in 1 right
+    pull    block           side 0   ; Get Flag Value from High level Code
+    mov     x osr           side 0   ; Save it in X for ever
+.wrap_target
+waiti:    
+    in      isr 8           side 0   ; put isr back at high bits to prepare for shift
+    wait    1 irq prev 1    side 0   ; Wait for Sample Clock interrupt
+    in      pins 1          side 0   ; Grab the new bit
+    in      null 24         side 0   ; move it to low byte (shift in 24 zeros)
+    mov     y isr           side 0   ; Grab the current shifted value
+    jmp     x != y waiti    side 0   ; Compare to a Flag char
+    irq     set 3           side 1   ; FLAG was detected
+.wrap               
