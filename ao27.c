@@ -100,6 +100,8 @@
 
 uint flagcount = 0;
 uint datacount = 0;
+uint pio1unknownIRQ0 = 0;
+uint pio1unknownIRQ1 = 0;
 
 // --------------------------------------------------------
 //  Flag IRQ Handler
@@ -111,6 +113,8 @@ void pio_irq_flag() {
   if (pio_interrupt_get(pio, isr)) {       
     flagcount++;
     pio_interrupt_clear(pio, isr);
+  } else {
+    pio1unknownIRQ0++;
   }
 }
 
@@ -124,6 +128,8 @@ void pio_irq_data() {
   if (pio_interrupt_get(pio, isr)) {       
     datacount++;
     pio_interrupt_clear(pio, isr);
+  } else {
+    pio1unknownIRQ1++;
   }
 }
 
@@ -232,7 +238,7 @@ int main() {
   setupPIO0();
   setupPIO1();
   while(1) {
-    printf("Flag Count: %i\n", flagcount);
+    printf("Flag Count: %i,  Data Count: %i, unknown0: %i, unknown1: %i\n", flagcount, datacount, pio1unknownIRQ0, pio1unknownIRQ1);
     sleep_ms(1000);
   }
 }
