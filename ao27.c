@@ -31,19 +31,19 @@
   
   PIO 1
     sm 0    Flag Detector
-    sm 1
+    sm 1    data collector
     sm 2
     sm 3
     irq 0
     irq 1
     irq 2
-    irq 3
-    irq 4
+    irq 3  flag detector
+    irq 4  data ready
     irq 5
     irq 6
     irq 7
-    IRQ 0
-    IRQ 1
+    IRQ 0  flag detector
+    IRQ 1  data ready
 
   PIO 2
     sm 0
@@ -99,22 +99,37 @@
 #define pin28         28
 
 uint flagcount = 0;
+uint datacount = 0;
 
-void pio_irq_handler() {
+// --------------------------------------------------------
+//  Flag IRQ Handler
+// --------------------------------------------------------
+void pio_irq_flag() {
   PIO pio = pio1;
   uint isr = 3;
 
-  // Check if our specific state machine triggered the IRQ
-    if (pio_interrupt_get(pio, isr)) {       
-        // Handle your time-sensitive interrupt task here
-        flagcount++;
-        // MUST CLEAR THE INTERRUPT: Clears the PIO hardware flag
-        pio_interrupt_clear(pio, isr);
-    }
+  if (pio_interrupt_get(pio, isr)) {       
+    flagcount++;
+    pio_interrupt_clear(pio, isr);
+  }
 }
 
+// --------------------------------------------------------
+//  Data IRQ handler
+// --------------------------------------------------------
+void pio_irq_data() {
+  PIO pio = pio1;
+  uint isr = 4;
 
-// Setup PIO0 for Rx Clock and NRZI
+  if (pio_interrupt_get(pio, isr)) {       
+    datacount++;
+    pio_interrupt_clear(pio, isr);
+  }
+}
+
+// --------------------------------------------------------
+//  PIO 0   Setup for Rx Clock and NRZI
+// --------------------------------------------------------
 void setupPIO0() {
   printf("<setupPIO0> Start\n");
   PIO pio = pio0;
@@ -159,6 +174,9 @@ void setupPIO0() {
   printf("<setupPIO0> End\n");
 }
 
+// --------------------------------------------------------
+//  PIO 1
+// --------------------------------------------------------
 void setupPIO1() {
   printf("<setupPIO1> Start\n");
   PIO pio = pio1;
@@ -181,9 +199,13 @@ void setupPIO1() {
   sm_config_set_out_pins(&sm_flag, pinData, 1);
 
   // interrupt setup
-  irq_set_exclusive_handler(PIO1_IRQ_0, pio_irq_handler);
+  irq_set_exclusive_handler(PIO1_IRQ_0, pio_irq_flag);
   irq_set_enabled(PIO1_IRQ_0, true);
   pio_set_irq0_source_enabled(pio, pis_interrupt3, true);
+
+  irq_set_exclusive_handler(PIO1_IRQ_1, pio_irq_data);
+  irq_set_enabled(PIO1_IRQ_1, true);
+  pio_set_irq1_source_enabled(pio, pis_interrupt4, true);
 
   // Init
   pio_sm_init(pio, sm, offset_flag, &sm_flag);  // Init SM
@@ -193,6 +215,9 @@ void setupPIO1() {
   printf("<setupPIO1> End\n");
 }
 
+// --------------------------------------------------------
+//    main
+// --------------------------------------------------------
 int main() {
   set_sys_clock_khz(156000, true);
   setup_default_uart();
