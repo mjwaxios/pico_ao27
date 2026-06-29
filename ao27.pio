@@ -138,17 +138,19 @@ waiti:
 .wrap_target
 resetx:
     set     x 5             side 0  ; wait for 5 ones in a row
-    wait    1 irq 4         side 0  ; Wait for flag detector to be done
+next1:    
+    wait    1 irq 4    [3]  side 0  ; Wait for flag detector to be done,  wait for input to be stable
     mov     y pins          side 0  ; grab the input data
     mov     pins y          side 0  ; set the data output to the input
     jmp     !y    zeroin    side 0  ; check for a zero
 output1:    
-    jmp     x-- ones5       side 1  ; clock out the data but next bit might need to be skipped
-zeroin:
-    jmp     resetx          side 1 ; output clock signal and start again
+    jmp     x-- next1       side 1  ; clock out the data but next bit might need to be skipped
 ones5:   
-    wait    1 irq 4         side 0  ; Wait for flag detector to be done
+    wait    1 irq 4    [3]  side 0  ; Wait for flag detector to be done
     mov     y pins          side 0  ; get input
+    mov     pins y          side 0  ; put on data line but not clock line
     jmp     !y    resetx    side 0  ; skip the zero by not outputting a clock
-    nop                     side 1  ; was a one so clock it out
+    jmp     next1           side 1  ; output clock signal and start again
+zeroin:
+    nop                     side 1  ; clock out zero
 .wrap               

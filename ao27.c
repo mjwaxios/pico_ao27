@@ -123,7 +123,7 @@ void pio_irq_flag() {
 // --------------------------------------------------------
 void pio_irq_data() {
   PIO pio = pio1;
-  uint isr = 4;
+  uint isr = 5;
 
   if (pio_interrupt_get(pio, isr)) {       
     datacount++;
@@ -226,7 +226,7 @@ void setupPIO1() {
 
   irq_set_exclusive_handler(PIO1_IRQ_1, pio_irq_data);
   irq_set_enabled(PIO1_IRQ_1, true);
-  pio_set_irq1_source_enabled(pio, pis_interrupt4, true);
+  pio_set_irq1_source_enabled(pio, pis_interrupt5, true);
 
   // Init
   pio_sm_init(pio, sm, offset_flag, &sm_flag);  // Init SM
