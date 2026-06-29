@@ -22,7 +22,7 @@
     irq 1   NRZI clock
     irq 2
     irq 3
-    irq 4
+    irq 4   NRZI output ready for txclock
     irq 5
     irq 6
     irq 7
@@ -31,15 +31,15 @@
   
   PIO 1
     sm 0    Flag Detector
-    sm 1    data collector
+    sm 1    zero unstuffer
     sm 2
     sm 3
     irq 0
     irq 1
-    irq 2
+    irq 2  flag detector output ready for unstuff
     irq 3  flag detector
     irq 4  data ready
-    irq 5
+    irq 5  
     irq 6
     irq 7
     IRQ 0  flag detector
@@ -176,7 +176,22 @@ void setupPIO0() {
   sm_config_set_set_pins(&sm_nrzi, pinNRZIdecode, 1);
   pio_sm_init(pio, sm, offset_nrzi, &sm_nrzi);
 
-  pio_enable_sm_mask_in_sync(pio, 0x03);
+
+    // Setup Receive Clock PLL SM
+  sm = 2;
+  uint offset_txclk = pio_add_program(pio, &txclock_program);
+  pio_sm_config sm_tx = txclock_program_get_default_config(offset_txclk);
+  // Setup GPIO Pins
+
+  // Setup Output Pins
+  pio_gpio_init(pio, pinToCPU1);
+  pio_gpio_init(pio, pinToCPU2);
+  pio_sm_set_consecutive_pindirs(pio, sm, pinToCPU1, 2, true);
+  sm_config_set_set_pins(&sm_tx, pinToCPU1, 2);
+  
+  pio_sm_init(pio, sm, offset_txclk, &sm_tx);
+
+  pio_enable_sm_mask_in_sync(pio, 0x07);
   printf("<setupPIO0> End\n");
 }
 
@@ -215,8 +230,29 @@ void setupPIO1() {
 
   // Init
   pio_sm_init(pio, sm, offset_flag, &sm_flag);  // Init SM
-  pio_enable_sm_mask_in_sync(pio, 0x01);        // Enable SM
-  pio->txf[sm] = 0x0000007E;                    // Put Flag Char into FIFO
+
+    // unstuffer
+  sm = 1;
+  uint offset_unstuff = pio_add_program(pio, &unstuff_program);
+  pio_sm_config sm_unstuff = unstuff_program_get_default_config(offset_unstuff);
+  // Setup GPIO Pins
+  // receive data in
+  pio_sm_set_consecutive_pindirs(pio, sm, pinNRZIdecode, 1, false);
+  sm_config_set_in_pins(&sm_unstuff, pinNRZIdecode);
+  sm_config_set_in_pin_count(&sm_unstuff, 1);
+
+  // Setup Output Pins
+  pio_gpio_init(pio, pinClk);
+  pio_gpio_init(pio, pinData);
+  pio_sm_set_consecutive_pindirs(pio, sm, pinClk, 1, true);
+  pio_sm_set_consecutive_pindirs(pio, sm, pinData, 1, true);
+  sm_config_set_sideset_pins(&sm_unstuff, pinClk);
+  sm_config_set_out_pins(&sm_unstuff, pinData, 1);
+  
+  pio_sm_init(pio, sm, offset_unstuff, &sm_unstuff);
+
+  pio_enable_sm_mask_in_sync(pio, 0x03);        // Enable SM
+  pio->txf[0] = 0x0000007E;                    // Put Flag Char into FIFO
 
   printf("<setupPIO1> End\n");
 }
@@ -224,7 +260,7 @@ void setupPIO1() {
 // --------------------------------------------------------
 //    main
 // --------------------------------------------------------
-int main() {
+ int main() {
   set_sys_clock_khz(156000, true);
   setup_default_uart();
   stdio_init_all();    
