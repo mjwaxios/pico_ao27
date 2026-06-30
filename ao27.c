@@ -239,8 +239,8 @@ void setupPIO1() {
 
     // unstuffer
   sm = 1;
-  uint offset_unstuff = pio_add_program(pio, &unstuff_program);
-  pio_sm_config sm_unstuff = unstuff_program_get_default_config(offset_unstuff);
+  uint offset_unstuff = pio_add_program(pio, &receiveData_program);
+  pio_sm_config sm_unstuff = receiveData_program_get_default_config(offset_unstuff);
   // Setup GPIO Pins
   // receive data in
   pio_sm_set_consecutive_pindirs(pio, sm, pinNRZIdecode, 1, false);

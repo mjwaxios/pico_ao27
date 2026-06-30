@@ -131,12 +131,12 @@ waiti:
 ;   Side pins: 
 ;          pin 0 = data clock
 ; ------------------------------------
-.program unstuff
+.program receiveData
 .clock_div 4                        ; Div 4 just so we can see the output pins on our slow Scope
-.side_set 2
+.side_set 1
 .in 1 right auto 8                  ; auto push every 8 bits
 resetall:
-    mov isr, null           side 0  ; clear isr
+    mov     isr, null       side 0  ; clear isr
 .wrap_target
 resetx:
     set     x 4             side 0  ; wait for 5 ones in a row
@@ -145,7 +145,7 @@ next1:
     jmp     pin resetall    side 0  ; check if flag pin is set
     mov     y pins          side 0  ; grab the input data
     mov     pins y          side 0  ; set the data output to the input
-    in      y 1             side 1  ; read in data bit
+    in      y 1             side 1  ; shift in data bit
     jmp     !y    resetx    side 0  ; check for a zero
 output1:    
     jmp     x-- next1       side 1  ; clock out the data but next bit might need to be skipped
@@ -155,5 +155,5 @@ ones5:
     mov     y pins          side 0  ; get input
     mov     pins y          side 0  ; put on data line but not clock line
     jmp     !y    resetx    side 0  ; skip the zero by not outputting a clock
-    in      y 1             side 1  ; read in data bit
+    in      y 1             side 1  ; shift in data bit
 .wrap               
