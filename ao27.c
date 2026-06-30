@@ -1,9 +1,6 @@
 /**
- * Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
- *
- * SPDX-License-Identifier: BSD-3-Clause
+ * Copyright (c) 2026 Michael Wyrick,  N3UC
  */
-
 #include <stdio.h>
 
 #include "pico/stdlib.h"
@@ -16,7 +13,7 @@
   PIO 0
     sm 0    Rx CLK PLL
     sm 1    NRZI decode (not zero unstuff)
-    sm 2
+    sm 2    Tx Clock to CPU1 and CPU2
     sm 3
     irq 0   Rx Sample Clock
     irq 1   NRZI clock
@@ -31,13 +28,13 @@
   
   PIO 1
     sm 0    Flag Detector
-    sm 1    zero unstuffer
+    sm 1    zero unstuffer, receiveData
     sm 2
     sm 3
     irq 0
     irq 1
     irq 2  flag detector output ready for unstuff
-    irq 3  flag detector
+    irq 3  flag detected
     irq 4  
     irq 5  
     irq 6

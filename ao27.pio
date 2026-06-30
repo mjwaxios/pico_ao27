@@ -1,5 +1,7 @@
-
-.pio_version 1 // requires version 1
+;/**
+; * Copyright (c) 2026 Michael Wyrick,  N3UC
+; */
+.pio_version 1 // requires version 1 (RP2350,  Pico 2)
 
 ; ------------------------------------
 ;
