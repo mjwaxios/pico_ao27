@@ -106,18 +106,18 @@ diff:
 ; ------------------------------------
 .program flag
 .clock_div 4                        ; Div 4 just so we can see the output pins on our slow Scope
-.side_set 1
+.side_set 1 opt
 .in 1 right
     pull    block           side 0  ; Get Flag Value from High level Code
     mov     x osr           side 0  ; Save it in X for ever
 .wrap_target
 waiti:    
-    in      isr 8           side 0  ; put isr back at high bits to prepare for shift
-    irq     set 4           side 0  ; Let unstuffer know we finished
-    wait    1 irq prev 1    side 0  ; Wait for Sample Clock interrupt
-    in      pins 1          side 0  ; Grab the new bit
-    in      null 24         side 0  ; move it to low byte (shift in 24 zeros)
-    mov     y isr           side 0  ; Grab the current shifted value
+    in      isr 8                   ; put isr back at high bits to prepare for shift
+    irq     set 4                   ; Let unstuffer know we finished
+    wait    1 irq prev 1            ; Wait for Sample Clock interrupt
+    in      pins 1                  ; Grab the new bit
+    in      null 24                 ; move it to low byte (shift in 24 zeros)
+    mov     y isr                   ; Grab the current shifted value
     jmp     x != y waiti    side 0  ; Compare to a Flag char
     irq     set 3           side 1  ; FLAG was detected
 .wrap               
@@ -133,24 +133,27 @@ waiti:
 ; ------------------------------------
 .program unstuff
 .clock_div 4                        ; Div 4 just so we can see the output pins on our slow Scope
-.side_set 1
-.in 1 right
+.side_set 2
+.in 1 right auto 8                  ; auto push every 8 bits
+resetall:
+    mov isr, null           side 0  ; clear isr
 .wrap_target
 resetx:
-    set     x 5             side 0  ; wait for 5 ones in a row
+    set     x 4             side 0  ; wait for 5 ones in a row
 next1:    
-    wait    1 irq 4    [3]  side 0  ; Wait for flag detector to be done,  wait for input to be stable
+    wait    1 irq 4    [7]  side 0  ; Wait for flag detector to be done,  wait for input to be stable
+    jmp     pin resetall    side 0  ; check if flag pin is set
     mov     y pins          side 0  ; grab the input data
     mov     pins y          side 0  ; set the data output to the input
-    jmp     !y    zeroin    side 0  ; check for a zero
+    in      y 1             side 1  ; read in data bit
+    jmp     !y    resetx    side 0  ; check for a zero
 output1:    
     jmp     x-- next1       side 1  ; clock out the data but next bit might need to be skipped
 ones5:   
-    wait    1 irq 4    [3]  side 0  ; Wait for flag detector to be done
+    wait    1 irq 4    [7]  side 0  ; Wait for flag detector to be done
+    jmp     pin resetall    side 0  ; check if flag pin is set
     mov     y pins          side 0  ; get input
     mov     pins y          side 0  ; put on data line but not clock line
     jmp     !y    resetx    side 0  ; skip the zero by not outputting a clock
-    jmp     next1           side 1  ; output clock signal and start again
-zeroin:
-    nop                     side 1  ; clock out zero
+    in      y 1             side 1  ; read in data bit
 .wrap               

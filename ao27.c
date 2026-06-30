@@ -38,12 +38,12 @@
     irq 1
     irq 2  flag detector output ready for unstuff
     irq 3  flag detector
-    irq 4  data ready
+    irq 4  
     irq 5  
     irq 6
     irq 7
     IRQ 0  flag detector
-    IRQ 1  data ready
+    IRQ 1  SM 1 Rx Fifo not Empty
 
   PIO 2
     sm 0
@@ -103,6 +103,9 @@ uint datacount = 0;
 uint pio1unknownIRQ0 = 0;
 uint pio1unknownIRQ1 = 0;
 
+uint8_t packet[1024];
+int packetlen = 0;
+
 // --------------------------------------------------------
 //  Flag IRQ Handler
 // --------------------------------------------------------
@@ -111,8 +114,14 @@ void pio_irq_flag() {
   uint isr = 3;
 
   if (pio_interrupt_get(pio, isr)) {       
-    flagcount++;
+    flagcount++;   
     pio_interrupt_clear(pio, isr);
+    if (packetlen > 0) {
+      for(int i=0; i < packetlen; i++) 
+        printf("%02X ", packet[i]);
+      printf("\n");
+    }
+    packetlen = 0;
   } else {
     pio1unknownIRQ0++;
   }
@@ -123,13 +132,14 @@ void pio_irq_flag() {
 // --------------------------------------------------------
 void pio_irq_data() {
   PIO pio = pio1;
-  uint isr = 5;
+  uint sm_data = 1;
 
-  if (pio_interrupt_get(pio, isr)) {       
+  while (!pio_sm_is_rx_fifo_empty(pio, sm_data)) {
+    uint32_t data = pio_sm_get(pio, sm_data);
+    if (packetlen < 1024) {
+      packet[packetlen++] = data >> 24;   // Grab the data byte and save it
+    }
     datacount++;
-    pio_interrupt_clear(pio, isr);
-  } else {
-    pio1unknownIRQ1++;
   }
 }
 
@@ -215,18 +225,14 @@ void setupPIO1() {
   pio_gpio_init(pio, pinFlag);
   pio_gpio_init(pio, pinData);
   pio_sm_set_consecutive_pindirs(pio, sm, pinFlag, 1, true);
-  pio_sm_set_consecutive_pindirs(pio, sm, pinData, 1, true);
+ // pio_sm_set_consecutive_pindirs(pio, sm, pinData, 1, true);
   sm_config_set_sideset_pins(&sm_flag, pinFlag);
-  sm_config_set_out_pins(&sm_flag, pinData, 1);
+//  sm_config_set_out_pins(&sm_flag, pinData, 1);
 
   // interrupt setup
   irq_set_exclusive_handler(PIO1_IRQ_0, pio_irq_flag);
   irq_set_enabled(PIO1_IRQ_0, true);
   pio_set_irq0_source_enabled(pio, pis_interrupt3, true);
-
-  irq_set_exclusive_handler(PIO1_IRQ_1, pio_irq_data);
-  irq_set_enabled(PIO1_IRQ_1, true);
-  pio_set_irq1_source_enabled(pio, pis_interrupt5, true);
 
   // Init
   pio_sm_init(pio, sm, offset_flag, &sm_flag);  // Init SM
@@ -244,12 +250,21 @@ void setupPIO1() {
   // Setup Output Pins
   pio_gpio_init(pio, pinClk);
   pio_gpio_init(pio, pinData);
+  pio_gpio_init(pio, pin15);
+  pio_gpio_init(pio, pin16);
+  pio_gpio_init(pio, pin17);
   pio_sm_set_consecutive_pindirs(pio, sm, pinClk, 1, true);
   pio_sm_set_consecutive_pindirs(pio, sm, pinData, 1, true);
+  pio_sm_set_consecutive_pindirs(pio, sm, pin15, 3, true);
   sm_config_set_sideset_pins(&sm_unstuff, pinClk);
-  sm_config_set_out_pins(&sm_unstuff, pinData, 1);
+  sm_config_set_jmp_pin(&sm_unstuff, pinFlag);
+  sm_config_set_out_pins(&sm_unstuff, pin15, 3);
   
   pio_sm_init(pio, sm, offset_unstuff, &sm_unstuff);
+
+  irq_set_exclusive_handler(PIO1_IRQ_1, pio_irq_data);
+  irq_set_enabled(PIO1_IRQ_1, true);
+  pio_set_irq1_source_enabled(pio, pis_sm1_rx_fifo_not_empty, true);
 
   pio_enable_sm_mask_in_sync(pio, 0x03);        // Enable SM
   pio->txf[0] = 0x0000007E;                    // Put Flag Char into FIFO
@@ -260,7 +275,7 @@ void setupPIO1() {
 // --------------------------------------------------------
 //    main
 // --------------------------------------------------------
- int main() {
+   int main() {
   set_sys_clock_khz(156000, true);
   setup_default_uart();
   stdio_init_all();    
@@ -274,7 +289,7 @@ void setupPIO1() {
   setupPIO0();
   setupPIO1();
   while(1) {
-    printf("Flag Count: %i,  Data Count: %i, unknown0: %i, unknown1: %i\n", flagcount, datacount, pio1unknownIRQ0, pio1unknownIRQ1);
+ //   printf("\nFlag Count: %i,  Data Count: %i, unknown0: %i, unknown1: %i\n", flagcount, datacount, pio1unknownIRQ0, pio1unknownIRQ1);
     sleep_ms(1000);
   }
 }
