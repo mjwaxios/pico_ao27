@@ -127,7 +127,7 @@ waiti:
 ; ------------------------------------
 ; Wait for Interrupt Zero Unstuff,  only clock outgoing data if not bit stuffed
 ;   In Pins: NRZI decoded data pin
-;   Out Pins: data out
+;   Out Pins: n/a
 ;   Jmp Pin: n/a
 ;   Set Pins: n/a
 ;   Side pins: 
@@ -141,12 +141,11 @@ resetall:
     mov     isr, null       side 0  ; clear isr
 .wrap_target
 resetx:
-    set     x 4             side 0  ; wait for 5 ones in a row
+    set     x (5 - 1)       side 0  ; wait for 5 ones in a row (one less count for x=zero count)
 next1:    
     wait    1 irq 4    [7]  side 0  ; Wait for flag detector to be done,  wait for input to be stable
     jmp     pin resetall    side 0  ; check if flag pin is set
     mov     y pins          side 0  ; grab the input data
-    mov     pins y          side 0  ; set the data output to the input
     in      y 1             side 1  ; shift in data bit
     jmp     !y    resetx    side 0  ; check for a zero
 output1:    
@@ -155,7 +154,39 @@ ones5:
     wait    1 irq 4    [7]  side 0  ; Wait for flag detector to be done
     jmp     pin resetall    side 0  ; check if flag pin is set
     mov     y pins          side 0  ; get input
-    mov     pins y          side 0  ; put on data line but not clock line
     jmp     !y    resetx    side 0  ; skip the zero by not outputting a clock
     in      y 1             side 1  ; shift in data bit
 .wrap               
+
+; ------------------------------------
+;
+;  PIO 2 sm
+;
+; ------------------------------------
+
+; ------------------------------------
+; WS Led
+;   In Pins: n/a
+;   Out Pins: n/a
+;   Jmp Pin: n/a
+;   Set Pins: n/a
+;   Side pins: 
+;          pin 0 = led data
+; ------------------------------------
+.program wsled
+.define public T1 3
+.define public T2 3
+.define public T3 4
+
+.clock_div 19                        ; 
+.side_set 1
+.out 1 left auto 24                  ; auto push every 24 bits
+.wrap_target
+bitloop:
+    out x, 1       side 0 [T3 - 1] ; Side-set still takes place when instruction stalls
+    jmp !x do_zero side 1 [T1 - 1] ; Branch on the bit we shifted out. Positive pulse
+do_one:
+    jmp  bitloop   side 1 [T2 - 1] ; Continue driving high, for a long pulse
+do_zero:
+    nop            side 0 [T2 - 1] ; Or drive low, for a short pulse
+.wrap

@@ -95,6 +95,40 @@
 
 #define pin28         28
 
+// --------------------------------------------------------
+//    WS LED Code
+// --------------------------------------------------------
+#define NUMLEDS 3
+uint32_t leds[NUMLEDS];
+
+#define LEDOFF urgb_u32(0x00,0x00,0x00)
+#define LEDRED urgb_u32(0xFF,0x00,0x00)
+#define LEDGREEN urgb_u32(0x00,0xFF,0x00)
+#define LEDBLUE urgb_u32(0x00,0x00,0xFF)
+#define LEDCYAN urgb_u32(0x00,0xFF,0xFF)
+#define LEDYELLOW urgb_u32(0xFF,0xFF,0x00)
+#define LEDMEGENTA urgb_u32(0xFF,0x00,0xFF)
+#define LEDWHITE urgb_u32(0xFF,0xFF,0xFF)
+
+#define Brightness 0.1
+
+static inline void put_pixel(uint32_t pixel_grb) {
+    pio_sm_put_blocking(pio2, 0, pixel_grb << 8u);
+}
+
+static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b) {
+    return
+            ((uint32_t) (r * Brightness) << 8) |
+            ((uint32_t) (g * Brightness) << 16) |
+            (uint32_t) (b * Brightness);
+}
+
+void UpdateLeds() {
+  for(int i=0; i < NUMLEDS; i++) {
+    put_pixel(leds[i]);
+  }
+}
+
 uint flagcount = 0;
 uint datacount = 0;
 uint pio1unknownIRQ0 = 0;
@@ -111,12 +145,21 @@ void pio_irq_flag() {
   uint isr = 3;
 
   if (pio_interrupt_get(pio, isr)) {       
+
     flagcount++;   
     pio_interrupt_clear(pio, isr);
     if (packetlen > 0) {
+      if (packetlen > 2)
+        leds[2] = LEDGREEN;
+    else
+        leds[2] = LEDRED;
+      UpdateLeds();
       for(int i=0; i < packetlen; i++) 
         printf("%02X ", packet[i]);
       printf("\n");
+    } else {
+      leds[2] = LEDOFF;
+      UpdateLeds();
     }
     packetlen = 0;
   } else {
@@ -183,7 +226,6 @@ void setupPIO0() {
   sm_config_set_set_pins(&sm_nrzi, pinNRZIdecode, 1);
   pio_sm_init(pio, sm, offset_nrzi, &sm_nrzi);
 
-
     // Setup Receive Clock PLL SM
   sm = 2;
   uint offset_txclk = pio_add_program(pio, &txclock_program);
@@ -247,15 +289,10 @@ void setupPIO1() {
   // Setup Output Pins
   pio_gpio_init(pio, pinClk);
   pio_gpio_init(pio, pinData);
-  pio_gpio_init(pio, pin15);
-  pio_gpio_init(pio, pin16);
-  pio_gpio_init(pio, pin17);
   pio_sm_set_consecutive_pindirs(pio, sm, pinClk, 1, true);
   pio_sm_set_consecutive_pindirs(pio, sm, pinData, 1, true);
-  pio_sm_set_consecutive_pindirs(pio, sm, pin15, 3, true);
   sm_config_set_sideset_pins(&sm_unstuff, pinClk);
   sm_config_set_jmp_pin(&sm_unstuff, pinFlag);
-  sm_config_set_out_pins(&sm_unstuff, pin15, 3);
   
   pio_sm_init(pio, sm, offset_unstuff, &sm_unstuff);
 
@@ -267,6 +304,23 @@ void setupPIO1() {
   pio->txf[0] = 0x0000007E;                    // Put Flag Char into FIFO
 
   printf("<setupPIO1> End\n");
+}
+
+void setupPIO2() {
+  PIO pio = pio2;
+  uint sm = 0;
+
+  pio_gpio_init(pio, pinWSLed);
+  pio_sm_set_consecutive_pindirs(pio, sm, pinWSLed, 1, true);
+
+  uint offset = pio_add_program(pio, &wsled_program);
+  pio_sm_config c = wsled_program_get_default_config(offset);
+
+  sm_config_set_sideset_pins(&c, pinWSLed);
+  sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+
+  pio_sm_init(pio, sm, offset, &c);
+  pio_sm_set_enabled(pio, sm, true);
 }
 
 // --------------------------------------------------------
@@ -285,9 +339,21 @@ void setupPIO1() {
 
   setupPIO0();
   setupPIO1();
+  setupPIO2();
+
+  for(int i=0;i<NUMLEDS;i++)
+    leds[i] = LEDOFF;
+
+  leds[1] = LEDMEGENTA;
+
   while(1) {
  //   printf("\nFlag Count: %i,  Data Count: %i, unknown0: %i, unknown1: %i\n", flagcount, datacount, pio1unknownIRQ0, pio1unknownIRQ1);
-    sleep_ms(1000);
+    sleep_ms(500);
+    leds[0] = LEDOFF;
+    UpdateLeds();
+    sleep_ms(500);
+    leds[0] = LEDYELLOW;
+    UpdateLeds();
   }
 }
 
