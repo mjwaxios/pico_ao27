@@ -11,4 +11,6 @@ This commit has:
   - pio SM SDLC flag detector (0x7E)
   - Interrupt to C code on flag detection,  Counts the number of flags detected
   - main loop in C prints flag count once a second
-
+  - Full Flag alignment for receive data
+  - Received Packets printed out
+  - WS2812 support with status indications on packet receive
