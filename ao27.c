@@ -113,7 +113,7 @@ uint32_t ledStatus[NUMLEDS];
 
     Effect Bits:
     7 6 5 4   3 2 1 0
-              x x x x  Time in deci seconds
+              x x x x  Time +1 in deci seconds (zero is 16 cycles, 1 is one cycle thru)
           x            Reserved
         x              0 = Always, 1 = one time
       x                0 = solid, 1 = blink every time cycles
@@ -127,19 +127,19 @@ uint32_t ledStatus[NUMLEDS];
   
 */
 
-#define LED_NORMAL   0x00000000
-#define LED_ONOFF    0x80000000
-#define LED_BLINK    0x40000000
-#define LED_ONETIME  0x20000000
-#define LED_RESERVED 0x10000000
+#define LED_NORMAL    0x00000000
+#define LED_ONOFF     0x80000000
+#define LED_BLINK     0x40000000
+#define LED_ONETIME   0x20000000
+#define LED_RESERVED  0x10000000
 #define LED_COUNTDOWN 0x10000000
-#define LED_TIMEMASK 0x0F000000
+#define LED_TIMEMASK  0x0F000000
 
 #define LED_2Hz     0x05000000
 #define LED_1Hz     0x0A000000
-#define LED_1_5Hz   0x0F000000
+#define LED_1_5sec  0x0F000000
+#define LED_1_6sec  0x00000000
 #define LED_FAST    0x01000000
-#define LED_FASTER  0x00000000
 
 #define LEDOFF      urgb_u32(LED_NORMAL, 0x00,0x00,0x00)
 #define LEDRED      urgb_u32(LED_NORMAL, 0xFF,0x00,0x00)
@@ -177,7 +177,7 @@ void Led_Service() {
         if (!(ledStatus[i] & LED_COUNTDOWN)) {
           ledStatus[i] = led | LED_COUNTDOWN;    // The first time thru so setup and mark
         } else {
-          uint8_t cntDown = (ledStatus[i] & LED_TIMEMASK) >> 24;
+          uint8_t cntDown = ((ledStatus[i] & LED_TIMEMASK) >> 24) - 1;
           if (cntDown == 0) {
             if (led & LED_ONETIME) {
               leds[i] &= LED_ONOFF;   // Turn off led as we ended our onetime
@@ -237,7 +237,7 @@ void pio_irq_flag() {
     if (packetlen > 0) {
 
       if (packetlen > 2)
-        leds[2] = LEDGREEN | LED_ONETIME | LED_FASTER;
+        leds[2] = LEDGREEN | LED_ONETIME | LED_FAST;
       else
         leds[2] = LEDRED | LED_ONETIME | LED_2Hz;
 
