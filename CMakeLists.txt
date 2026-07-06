@@ -42,7 +42,7 @@ pico_generate_pio_header(pio_ao27 ${CMAKE_CURRENT_LIST_DIR}/ao27.pio)
 
 target_sources(pio_ao27 PRIVATE ao27.c)
 
-target_link_libraries(pio_ao27 PRIVATE pico_stdlib hardware_pio)
+target_link_libraries(pio_ao27 PRIVATE pico_stdlib hardware_pio pico_multicore)
 pico_add_extra_outputs(pio_ao27)
 
 pico_enable_stdio_uart(pio_ao27 1)

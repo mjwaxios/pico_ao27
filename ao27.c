@@ -6,6 +6,8 @@
 #include "pico/stdlib.h"
 #include "hardware/pio.h"
 #include "hardware/clocks.h"
+#include "pico/multicore.h" 
+
 #include "ao27.pio.h"
 
 /*
@@ -100,15 +102,52 @@
 // --------------------------------------------------------
 #define NUMLEDS 3
 uint32_t leds[NUMLEDS];
+uint32_t ledStatus[NUMLEDS];
 
-#define LEDOFF urgb_u32(0x00,0x00,0x00)
-#define LEDRED urgb_u32(0xFF,0x00,0x00)
-#define LEDGREEN urgb_u32(0x00,0xFF,0x00)
-#define LEDBLUE urgb_u32(0x00,0x00,0xFF)
-#define LEDCYAN urgb_u32(0x00,0xFF,0xFF)
-#define LEDYELLOW urgb_u32(0xFF,0xFF,0x00)
-#define LEDMEGENTA urgb_u32(0xFF,0x00,0xFF)
-#define LEDWHITE urgb_u32(0xFF,0xFF,0xFF)
+/*
+  LED API
+  31-24  Effect  bits
+  23-16  Green
+  15-8   Red
+  7-0    Blue
+
+    Effect Bits:
+    7 6 5 4   3 2 1 0
+              x x x x  Time in deci seconds
+          x            Reserved
+        x              0 = Always, 1 = one time
+      x                0 = solid, 1 = blink every time cycles
+    x                  0 = on,  1 = off        
+    
+  An LED Status array contains the current status of the led
+  7 6 5 4  3 2 1 0
+           x x x x  Current count down time value
+        x           1 = counting down
+  x                 0 = on, 1 = off
+  
+*/
+
+#define LED_NORMAL   0x00000000
+#define LED_ONOFF    0x80000000
+#define LED_BLINK    0x40000000
+#define LED_ONETIME  0x20000000
+#define LED_RESERVED 0x10000000
+#define LED_COUNTDOWN 0x10000000
+#define LED_TIMEMASK 0x0F000000
+
+#define LED_2Hz   0x05000000
+#define LED_1Hz   0x0A000000
+#define LED_1_5Hz 0x0F000000
+#define LED_FAST  0x01000000
+
+#define LEDOFF      urgb_u32(LED_NORMAL, 0x00,0x00,0x00)
+#define LEDRED      urgb_u32(LED_NORMAL, 0xFF,0x00,0x00)
+#define LEDGREEN    urgb_u32(LED_NORMAL, 0x00,0xFF,0x00)
+#define LEDBLUE     urgb_u32(LED_NORMAL, 0x00,0x00,0xFF)
+#define LEDCYAN     urgb_u32(LED_NORMAL, 0x00,0xFF,0xFF)
+#define LEDYELLOW   urgb_u32(LED_NORMAL, 0xFF,0xFF,0x00)
+#define LEDMAGENTA  urgb_u32(LED_NORMAL, 0xFF,0x00,0xFF)
+#define LEDWHITE    urgb_u32(LED_NORMAL, 0xFF,0xFF,0xFF)
 
 #define Brightness 0.1
 
@@ -116,19 +155,65 @@ static inline void put_pixel(uint32_t pixel_grb) {
     pio_sm_put_blocking(pio2, 0, pixel_grb << 8u);
 }
 
-static inline uint32_t urgb_u32(uint8_t r, uint8_t g, uint8_t b) {
+static inline uint32_t urgb_u32(uint8_t effect, uint8_t r, uint8_t g, uint8_t b) {
     return
+            ((uint32_t) (effect) << 24) |
             ((uint32_t) (r * Brightness) << 8) |
             ((uint32_t) (g * Brightness) << 16) |
             (uint32_t) (b * Brightness);
 }
 
-void UpdateLeds() {
-  for(int i=0; i < NUMLEDS; i++) {
-    put_pixel(leds[i]);
+void Led_Service() {
+  while (1) {
+    // Update the Status of each led
+    for(int i=0; i < NUMLEDS; i++) {
+      uint32_t led = leds[i];   
+      // Check for off
+      if (led & LED_ONOFF) {
+        // Is marked as off, so set status to off
+        ledStatus[i] = LEDOFF;
+      } else if (led & (LED_BLINK | LED_ONETIME)) { // check for blink or one time
+        if (!(ledStatus[i] & LED_COUNTDOWN)) {
+          ledStatus[i] = led | LED_COUNTDOWN;    // The first time thru so setup and mark
+        } else {
+          uint8_t cntDown = (ledStatus[i] & LED_TIMEMASK) >> 24;
+          if (cntDown == 0) {
+            if (led & LED_ONETIME) {
+              leds[i] &= LED_ONOFF;   // Turn off led as we ended our onetime
+              ledStatus[i] = LEDOFF;  // Turn it off 
+            }
+            if (led & LED_BLINK) {
+              if (ledStatus[i] & LED_ONOFF) {  // Led is off so turn it on
+                ledStatus[i] = led;
+              } else {
+                ledStatus[i] = LEDOFF | LED_ONOFF | LED_COUNTDOWN  | (led & LED_TIMEMASK)  ;  // Turn it off and mark it
+              }
+            }
+          } else {
+          // Count Down
+            uint8_t cntDown = (ledStatus[i] & LED_TIMEMASK) >> 24;
+            cntDown--;
+            ledStatus[i] &= ~LED_TIMEMASK;  // Mask out the time
+            ledStatus[i] |= cntDown << 24;  // Put in the new time
+          }       
+        }
+      } else {
+        // Normal LED
+        ledStatus[i] = led;
+      }
+
+      // Send the status values to the hardware leds
+      for(int i=0; i < NUMLEDS; i++) {
+        put_pixel(ledStatus[i]);
+      }
+    }
+    sleep_ms(100);
   }
 }
 
+// --------------------------------------------------------
+// Packet Stuff
+// --------------------------------------------------------
 uint flagcount = 0;
 uint datacount = 0;
 uint pio1unknownIRQ0 = 0;
@@ -149,17 +234,15 @@ void pio_irq_flag() {
     flagcount++;   
     pio_interrupt_clear(pio, isr);
     if (packetlen > 0) {
+
       if (packetlen > 2)
-        leds[2] = LEDGREEN;
-    else
-        leds[2] = LEDRED;
-      UpdateLeds();
-      for(int i=0; i < packetlen; i++) 
+        leds[2] = LEDGREEN | LED_ONETIME | LED_FAST;
+      else
+        leds[2] = LEDRED | LED_ONETIME | LED_2Hz;
+
+        for(int i=0; i < packetlen; i++) 
         printf("%02X ", packet[i]);
       printf("\n");
-    } else {
-      leds[2] = LEDOFF;
-      UpdateLeds();
     }
     packetlen = 0;
   } else {
@@ -341,19 +424,15 @@ void setupPIO2() {
   setupPIO1();
   setupPIO2();
 
-  for(int i=0;i<NUMLEDS;i++)
-    leds[i] = LEDOFF;
-
-  leds[1] = LEDMEGENTA;
+  leds[0] = LEDBLUE | LED_BLINK | LED_2Hz;
+  leds[1] = LEDMAGENTA;
+  leds[2] = LEDOFF;
+  
+  multicore_launch_core1(Led_Service);
 
   while(1) {
- //   printf("\nFlag Count: %i,  Data Count: %i, unknown0: %i, unknown1: %i\n", flagcount, datacount, pio1unknownIRQ0, pio1unknownIRQ1);
-    sleep_ms(500);
-    leds[0] = LEDOFF;
-    UpdateLeds();
-    sleep_ms(500);
-    leds[0] = LEDYELLOW;
-    UpdateLeds();
+//   printf("\nFlag Count: %i,  Data Count: %i, unknown0: %i, unknown1: %i\n", flagcount, datacount, pio1unknownIRQ0, pio1unknownIRQ1);
+   sleep_ms(1000);
   }
 }
 
