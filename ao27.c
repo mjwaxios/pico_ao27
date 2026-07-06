@@ -135,10 +135,11 @@ uint32_t ledStatus[NUMLEDS];
 #define LED_COUNTDOWN 0x10000000
 #define LED_TIMEMASK 0x0F000000
 
-#define LED_2Hz   0x05000000
-#define LED_1Hz   0x0A000000
-#define LED_1_5Hz 0x0F000000
-#define LED_FAST  0x01000000
+#define LED_2Hz     0x05000000
+#define LED_1Hz     0x0A000000
+#define LED_1_5Hz   0x0F000000
+#define LED_FAST    0x01000000
+#define LED_FASTER  0x00000000
 
 #define LEDOFF      urgb_u32(LED_NORMAL, 0x00,0x00,0x00)
 #define LEDRED      urgb_u32(LED_NORMAL, 0xFF,0x00,0x00)
@@ -236,12 +237,20 @@ void pio_irq_flag() {
     if (packetlen > 0) {
 
       if (packetlen > 2)
-        leds[2] = LEDGREEN | LED_ONETIME | LED_FAST;
+        leds[2] = LEDGREEN | LED_ONETIME | LED_FASTER;
       else
         leds[2] = LEDRED | LED_ONETIME | LED_2Hz;
 
-        for(int i=0; i < packetlen; i++) 
+      for(int i=0; i < packetlen; i++) 
         printf("%02X ", packet[i]);
+      switch (packet[0]) {
+        case 0x27: leds[1] = LEDMAGENTA;
+        break;
+        case 0x9A: leds[1] = 0x00030000;
+        break;
+        default: leds[1] = 0x000F0F00 | LED_BLINK | LED_FAST;
+        break;
+      }
       printf("\n");
     }
     packetlen = 0;
@@ -425,7 +434,7 @@ void setupPIO2() {
   setupPIO2();
 
   leds[0] = LEDBLUE | LED_BLINK | LED_2Hz;
-  leds[1] = LEDMAGENTA;
+  leds[1] = LEDOFF;
   leds[2] = LEDOFF;
   
   multicore_launch_core1(Led_Service);
