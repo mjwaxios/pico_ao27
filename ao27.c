@@ -113,7 +113,7 @@ uint32_t ledStatus[NUMLEDS];
 
     Effect Bits:
     7 6 5 4   3 2 1 0
-              x x x x  Time +1 in deci seconds (zero is 16 cycles, 1 is one cycle thru)
+              x x x x  Time in deci seconds (zero is 16 cycles, 1 is one cycle thru)
           x            Reserved
         x              0 = Always, 1 = one time
       x                0 = solid, 1 = blink every time cycles
@@ -135,8 +135,12 @@ uint32_t ledStatus[NUMLEDS];
 #define LED_COUNTDOWN 0x10000000
 #define LED_TIMEMASK  0x0F000000
 
-#define LED_2Hz     0x05000000
-#define LED_1Hz     0x0A000000
+#define LED_0_1sec  0x01000000
+#define LED_0_2sec  0x02000000
+#define LED_0_3sec  0x03000000
+#define LED_0_4sec  0x04000000
+#define LED_0_5sec  0x05000000
+#define LED_1_0sec  0x0A000000
 #define LED_1_5sec  0x0F000000
 #define LED_1_6sec  0x00000000
 #define LED_FAST    0x01000000
@@ -239,14 +243,14 @@ void pio_irq_flag() {
       if (packetlen > 2)
         leds[2] = LEDGREEN | LED_ONETIME | LED_FAST;
       else
-        leds[2] = LEDRED | LED_ONETIME | LED_2Hz;
+        leds[2] = LEDRED | LED_ONETIME | LED_0_5sec;
 
       for(int i=0; i < packetlen; i++) 
         printf("%02X ", packet[i]);
       switch (packet[0]) {
         case 0x27: leds[1] = LEDMAGENTA;
         break;
-        case 0x9A: leds[1] = 0x00030000;
+        case 0x9A: leds[1] = 0x00FF0000;
         break;
         default: leds[1] = 0x000F0F00 | LED_BLINK | LED_FAST;
         break;
@@ -433,7 +437,7 @@ void setupPIO2() {
   setupPIO1();
   setupPIO2();
 
-  leds[0] = LEDBLUE | LED_BLINK | LED_2Hz;
+  leds[0] = LEDBLUE | LED_BLINK | LED_0_5sec;
   leds[1] = LEDOFF;
   leds[2] = LEDOFF;
   
