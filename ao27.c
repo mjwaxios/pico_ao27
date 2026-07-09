@@ -250,7 +250,7 @@ void pio_irq_flag() {
       switch (packet[0]) {
         case 0x27: leds[1] = LEDMAGENTA;
         break;
-        case 0x9A: leds[1] = 0x00FF0000;
+        case 0x9A: leds[1] = 0x00030000;
         break;
         default: leds[1] = 0x000F0F00 | LED_BLINK | LED_FAST;
         break;
